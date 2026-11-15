@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { typeSchemas, maskSecret } from '$lib/schemas';
+  import { typeSchemas, maskSecret, getRecordMeta } from '$lib/schemas';
   import { enhance } from '$app/forms';
 
   let { data } = $props();
@@ -111,6 +111,7 @@
           </thead>
           <tbody class="divide-y divide-border">
             {#each data.records as r}
+              {@const meta = getRecordMeta(r)}
               <tr
                 onclick={() => (selectedRecord = r)}
                 class="hover:bg-muted/50 cursor-pointer transition-colors {selectedRecord?.id === r.id ? 'bg-muted' : ''}"
@@ -120,11 +121,15 @@
                 </td>
                 <td class="py-2 px-3 whitespace-nowrap">
                   <span
-                    class="rounded px-1.5 py-0.5 text-[10px] font-mono {r.deleted
-                      ? 'bg-destructive/10 text-destructive'
-                      : 'bg-muted text-foreground'}"
+                    class="inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-[11px] font-medium {meta.badgeClass}"
                   >
-                    {r.type}{r.deleted ? ' · 已删' : ''}
+                    <span>{meta.label}</span>
+                    {#if meta.subLabel}
+                      <span class="opacity-75 text-[10px]">{meta.subLabel}</span>
+                    {/if}
+                    {#if r.deleted}
+                      <span class="opacity-75">· 已删</span>
+                    {/if}
                   </span>
                 </td>
                 <td class="py-2 px-3 whitespace-nowrap font-medium text-foreground text-[11px]" title={r.uid}>
@@ -153,12 +158,16 @@
 
 <!-- 右侧抽屉：结构化呈现 + 原始 JSON -->
 {#if selectedRecord}
+  {@const drawerMeta = getRecordMeta(selectedRecord)}
   <div class="fixed inset-0 z-40 bg-black/40 flex justify-end">
     <div class="w-full max-w-lg bg-card border-l border-border h-full flex flex-col shadow-xl animate-in slide-in-from-right duration-200">
       <!-- 抽屉头部 -->
       <div class="h-14 px-4 border-b border-border flex items-center justify-between shrink-0">
         <div class="flex items-center space-x-2">
-          <span class="font-semibold text-sm">{selectedRecord.type} 详情</span>
+          <span class="inline-flex items-center gap-1 rounded px-2 py-0.5 text-xs font-medium {drawerMeta.badgeClass}">
+            {drawerMeta.label}
+          </span>
+          <span class="font-semibold text-sm">详情</span>
           {#if selectedRecord.deleted}
             <span class="rounded bg-destructive/10 text-destructive px-1.5 py-0.5 text-[10px]">已删除墓碑</span>
           {/if}

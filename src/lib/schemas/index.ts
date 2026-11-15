@@ -12,6 +12,93 @@ export interface TypeSchema {
   fields: SchemaField[];
 }
 
+export interface RecordMeta {
+  key: string;
+  label: string;
+  subLabel?: string;
+  badgeClass: string;
+}
+
+export function getRecordMeta(record: { type: string; deleted?: boolean; data?: any }): RecordMeta {
+  if (record.deleted) {
+    return {
+      key: 'deleted',
+      label: '已删除',
+      badgeClass: 'bg-destructive/10 text-destructive border border-destructive/20'
+    };
+  }
+
+  if (record.type === 'message') {
+    const isAi = record.data?.role === 1;
+    const msgType = record.data?.type;
+    let sub: string | undefined = undefined;
+    if (msgType === 1) sub = '🎤 语音';
+    else if (msgType === 2) sub = '🖼 图片';
+    else if (msgType === 3) sub = '📝 日记卡片';
+
+    if (isAi) {
+      return {
+        key: 'ai_reply',
+        label: '🤖 AI 回复',
+        subLabel: sub,
+        badgeClass: 'bg-purple-500/15 text-purple-600 dark:text-purple-300 border border-purple-500/30'
+      };
+    } else {
+      return {
+        key: 'my_message',
+        label: '👤 我的消息',
+        subLabel: sub,
+        badgeClass: 'bg-blue-500/15 text-blue-600 dark:text-blue-300 border border-blue-500/30'
+      };
+    }
+  }
+
+  switch (record.type) {
+    case 'diary':
+      return {
+        key: 'diary',
+        label: '📝 日记',
+        badgeClass: 'bg-amber-500/15 text-amber-600 dark:text-amber-300 border border-amber-500/30'
+      };
+    case 'todo':
+      return {
+        key: 'todo',
+        label: '✓ 待办',
+        badgeClass: 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-300 border border-emerald-500/30'
+      };
+    case 'bill':
+      return {
+        key: 'bill',
+        label: '¥ 账本',
+        badgeClass: 'bg-rose-500/15 text-rose-600 dark:text-rose-300 border border-rose-500/30'
+      };
+    case 'session':
+      return {
+        key: 'session',
+        label: '📅 会话',
+        badgeClass: 'bg-indigo-500/15 text-indigo-600 dark:text-indigo-300 border border-indigo-500/30'
+      };
+    case 'tag':
+      return {
+        key: 'tag',
+        label: '🏷 标签',
+        badgeClass: 'bg-teal-500/15 text-teal-600 dark:text-teal-300 border border-teal-500/30'
+      };
+    case 'setting':
+      return {
+        key: 'setting',
+        label: '⚙ 设置',
+        badgeClass: 'bg-zinc-500/15 text-zinc-600 dark:text-zinc-300 border border-zinc-500/30'
+      };
+    default:
+      return {
+        key: record.type,
+        label: record.type,
+        badgeClass: 'bg-muted text-foreground border border-border'
+      };
+  }
+}
+
 export function maskSecret(val: unknown): string {
   if (typeof val !== 'string' || !val) return '';
   if (val.length <= 8) return '********';
