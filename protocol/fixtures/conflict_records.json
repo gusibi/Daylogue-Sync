@@ -1,0 +1,39 @@
+{
+  "description": "演示设备 A 与设备 B 分别修改同一条待办时的冲突解决用例",
+  "existingOnServer": {
+    "type": "todo",
+    "id": "todo_001",
+    "v": 1,
+    "hlc": "1763184005000-0001-dev_ios_02",
+    "ts": 1763184005000,
+    "deleted": false,
+    "data": {
+      "content": "晚上买脱脂牛奶（iOS 修改更新）",
+      "isCompleted": 0
+    }
+  },
+  "incomingOlder": {
+    "type": "todo",
+    "id": "todo_001",
+    "v": 1,
+    "hlc": "1763184003000-0001-dev_macos_01",
+    "ts": 1763184003000,
+    "deleted": false,
+    "data": {
+      "content": "晚上买全脂牛奶（旧时间戳）",
+      "isCompleted": 0
+    }
+  },
+  "incomingNewer": {
+    "type": "todo",
+    "id": "todo_001",
+    "v": 1,
+    "hlc": "1763184006000-0001-dev_macos_01",
+    "ts": 1763184006000,
+    "deleted": false,
+    "data": {
+      "content": "晚上买燕麦奶（最新修改胜出）",
+      "isCompleted": 1
+    }
+  }
+}

@@ -1,0 +1,162 @@
+[
+  {
+    "type": "session",
+    "id": "2026-11-15",
+    "v": 1,
+    "hlc": "1763184000100-0001-dev_macos_01",
+    "ts": 1763184000100,
+    "deleted": false,
+    "data": {
+      "dateString": "2026-11-15",
+      "diaryMarkdown": "# 今天又是充实的一天\n完成了很多核心工作。",
+      "moodScore": 85,
+      "keywords": "编程,发布,健康",
+      "lastSummarizedAt": 1763184000000,
+      "lastUpdatedAt": 1763184000100,
+      "lastMessagePreview": "收到，马上开始处理！"
+    }
+  },
+  {
+    "type": "message",
+    "id": "msg_user_text_001",
+    "v": 1,
+    "hlc": "1763184000200-0001-dev_macos_01",
+    "ts": 1763184000200,
+    "deleted": false,
+    "data": {
+      "sessionKey": "2026-11-15",
+      "timestamp": 1763184000200,
+      "role": 0,
+      "type": 0,
+      "status": 1,
+      "content": "今天晚上记得买牛奶",
+      "generatedEntities": "[{\"targetUuid\":\"todo_001\",\"type\":0}]",
+      "intent": "create_todo"
+    }
+  },
+  {
+    "type": "message",
+    "id": "msg_ai_text_002",
+    "v": 1,
+    "hlc": "1763184000300-0001-dev_macos_01",
+    "ts": 1763184000300,
+    "deleted": false,
+    "data": {
+      "sessionKey": "2026-11-15",
+      "timestamp": 1763184000300,
+      "role": 1,
+      "type": 0,
+      "status": 1,
+      "content": "好的，已经帮你把“买牛奶”记入待办事项了！"
+    }
+  },
+  {
+    "type": "message",
+    "id": "msg_user_media_003",
+    "v": 1,
+    "hlc": "1763184000400-0001-dev_macos_01",
+    "ts": 1763184000400,
+    "deleted": false,
+    "data": {
+      "sessionKey": "2026-11-15",
+      "timestamp": 1763184000400,
+      "role": 0,
+      "type": 2,
+      "status": 1,
+      "content": "发一张今天晚上的风景照片",
+      "media": {
+        "hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "mime": "image/jpeg",
+        "size": 102400,
+        "kind": "image"
+      }
+    }
+  },
+  {
+    "type": "todo",
+    "id": "todo_001",
+    "v": 1,
+    "hlc": "1763184000500-0001-dev_macos_01",
+    "ts": 1763184000500,
+    "deleted": false,
+    "data": {
+      "content": "晚上买牛奶",
+      "isCompleted": 0,
+      "isGoal": 0,
+      "dueDate": 1763222400000,
+      "tags": "[\"生活\",\"购物\"]",
+      "sourceMessageUuid": "msg_user_text_001",
+      "createdAt": 1763184000500
+    }
+  },
+  {
+    "type": "bill",
+    "id": "bill_001",
+    "v": 1,
+    "hlc": "1763184000600-0001-dev_macos_01",
+    "ts": 1763184000600,
+    "deleted": false,
+    "data": {
+      "amount": 25.5,
+      "category": "餐饮",
+      "description": "午餐便当",
+      "occurredAt": 1763184000600,
+      "sourceMessageUuid": "manual_entry",
+      "isIncome": 0
+    }
+  },
+  {
+    "type": "diary",
+    "id": "diary_001",
+    "v": 1,
+    "hlc": "1763184000700-0001-dev_macos_01",
+    "ts": 1763184000700,
+    "deleted": false,
+    "data": {
+      "sessionKey": "2026-11-15",
+      "content": "今天天气晴朗，各项事务进展顺利。",
+      "moodScore": 90.0,
+      "moodLabel": "愉悦",
+      "keywords": "晴朗,进展,顺利",
+      "createdAt": 1763184000700,
+      "updatedAt": 1763184000700,
+      "isEnabled": 1
+    }
+  },
+  {
+    "type": "tag",
+    "id": "购物",
+    "v": 1,
+    "hlc": "1763184000800-0001-dev_macos_01",
+    "ts": 1763184000800,
+    "deleted": false,
+    "data": {
+      "name": "购物",
+      "createdAt": 1763184000800
+    }
+  },
+  {
+    "type": "setting",
+    "id": "models",
+    "v": 1,
+    "hlc": "1763184000900-0001-dev_macos_01",
+    "ts": 1763184000900,
+    "deleted": false,
+    "data": {
+      "providers": {
+        "deepseek": {
+          "id": "deepseek",
+          "name": "DeepSeek",
+          "apiKey": "sk-test-secret-key-12345",
+          "baseUrl": "https://api.deepseek.com/v1"
+        }
+      },
+      "assignments": {
+        "text": {
+          "provider": "deepseek",
+          "model": "deepseek-chat"
+        }
+      }
+    }
+  }
+]

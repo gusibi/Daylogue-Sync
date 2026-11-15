@@ -1,0 +1,22 @@
+name = "daylogue-sync"
+main = ".svelte-kit/cloudflare/_worker.js"
+compatibility_date = "2024-11-01"
+compatibility_flags = ["nodejs_compat"]
+
+[assets]
+directory = ".svelte-kit/cloudflare"
+binding = "ASSETS"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "daylogue-sync"
+database_id = "daylogue-sync-local"
+migrations_dir = "migrations"
+
+[[r2_buckets]]
+binding = "BLOBS"
+bucket_name = "daylogue-blobs"
+
+[vars]
+ADMIN_KEY = "admin123"
+SESSION_SECRET = "change-this-in-production-to-a-secure-random-string"

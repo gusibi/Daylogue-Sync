@@ -1,0 +1,17 @@
+{
+  "validRequest": {
+    "confirm": "我知道要删除远端数据"
+  },
+  "invalidRequests": [
+    {
+      "confirm": "我知道要删除数据"
+    },
+    {
+      "confirm": "yes"
+    },
+    {
+      "confirm": ""
+    }
+  ],
+  "expectedPhrase": "我知道要删除远端数据"
+}
