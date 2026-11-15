@@ -8,6 +8,7 @@
     "build": "vite build",
     "preview": "wrangler dev",
     "deploy": "wrangler deploy",
+    "pages:deploy": "wrangler pages deploy .svelte-kit/cloudflare --project-name daylogue-sync",
     "test": "vitest run",
     "db:migrate:local": "wrangler d1 migrations apply daylogue-sync --local",
     "db:seed:local": "node scripts/seed-local.js",
