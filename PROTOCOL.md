@@ -29,6 +29,8 @@ interface SyncEnvelope<T = Record<string, unknown>> {
   id: string;
   /** Schema 版本号，默认 1 */
   v: number;
+  /** 所属用户 ID (UID)，如 usr_01jk... */
+  uid: string;
   /** 混合逻辑时钟：<timestamp_ms>-<counter_4digits>-<deviceId> */
   hlc: string;
   /** 业务时间戳（毫秒），用于后台过滤与时间线排序 */
@@ -70,7 +72,11 @@ interface SyncEnvelope<T = Record<string, unknown>> {
   "ok": true,
   "protocol": 1,
   "server": "0.1.0",
-  "time": 1763184000000
+  "time": 1763184000000,
+  "user": {
+    "id": "usr_01jk98az",
+    "name": "爸爸"
+  }
 }
 ```
 - **Response 401**: Token 无效或已吊销。

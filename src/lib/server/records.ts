@@ -6,6 +6,7 @@ export interface SyncEnvelope {
   type: string;
   id: string;
   v?: number;
+  uid?: string;
   hlc: string;
   ts?: number;
   deleted?: boolean;
@@ -19,6 +20,7 @@ export interface PushOptions {
   deviceName?: string;
   platform?: string;
   tokenId?: string;
+  userId?: string;
   records: SyncEnvelope[];
 }
 
@@ -46,7 +48,7 @@ export async function pushBatch(db: D1Database, opts: PushOptions): Promise<Push
 
   for (const item of records) {
     const existing = await db
-      .prepare('SELECT type, id, v, data, deleted, hlc, ts, seq FROM records WHERE space_id = ?1 AND type = ?2 AND id = ?3')
+      .prepare('SELECT type, id, v, data, deleted, hlc, ts, seq, uid FROM records WHERE space_id = ?1 AND type = ?2 AND id = ?3')
       .bind(spaceId, item.type, item.id)
       .first<{
         type: string;
@@ -57,6 +59,7 @@ export async function pushBatch(db: D1Database, opts: PushOptions): Promise<Push
         hlc: string;
         ts: number;
         seq: number;
+        uid: string;
       }>();
 
     if (!existing) {
@@ -72,6 +75,7 @@ export async function pushBatch(db: D1Database, opts: PushOptions): Promise<Push
           type: existing.type,
           id: existing.id,
           v: existing.v,
+          uid: existing.uid,
           hlc: existing.hlc,
           ts: existing.ts,
           deleted: existing.deleted === 1,
@@ -98,12 +102,13 @@ export async function pushBatch(db: D1Database, opts: PushOptions): Promise<Push
       const dataStr = isDeleted ? null : JSON.stringify(rec.data ?? {});
       const ts = rec.ts ?? now;
       const v = rec.v ?? 1;
+      const recordUid = rec.uid || opts.userId || 'usr_default';
 
       stmts.push(
         db
           .prepare(
-            `INSERT INTO records (space_id, type, id, v, data, deleted, hlc, ts, device_id, seq, updated_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)
+            `INSERT INTO records (space_id, type, id, v, data, deleted, hlc, ts, device_id, uid, seq, updated_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)
              ON CONFLICT(space_id, type, id) DO UPDATE SET
                v = ?4,
                data = ?5,
@@ -111,8 +116,9 @@ export async function pushBatch(db: D1Database, opts: PushOptions): Promise<Push
                hlc = ?7,
                ts = ?8,
                device_id = ?9,
-               seq = ?10,
-               updated_at = ?11`
+               uid = ?10,
+               seq = ?11,
+               updated_at = ?12`
           )
           .bind(
             spaceId,
@@ -124,6 +130,7 @@ export async function pushBatch(db: D1Database, opts: PushOptions): Promise<Push
             rec.hlc,
             ts,
             deviceId,
+            recordUid,
             assignedSeq,
             now
           )
@@ -185,7 +192,7 @@ export async function pullSince(
   const safeLimit = Math.min(Math.max(1, limit), 1000);
   const rows = await db
     .prepare(
-      `SELECT type, id, v, data, deleted, hlc, ts, seq
+      `SELECT type, id, v, data, deleted, hlc, ts, seq, uid
        FROM records
        WHERE space_id = ?1 AND seq > ?2
        ORDER BY seq ASC
@@ -201,6 +208,7 @@ export async function pullSince(
       hlc: string;
       ts: number;
       seq: number;
+      uid: string;
     }>();
 
   const results = rows.results || [];
@@ -211,6 +219,7 @@ export async function pullSince(
     type: r.type,
     id: r.id,
     v: r.v,
+    uid: r.uid || 'usr_default',
     hlc: r.hlc,
     ts: r.ts,
     deleted: r.deleted === 1,

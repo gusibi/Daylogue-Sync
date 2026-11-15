@@ -9,7 +9,7 @@
     { href: '/data', label: '数据明细', icon: '📋' },
     { href: '/media', label: '媒体文件', icon: '🖼️' },
     { href: '/devices', label: '连接设备', icon: '📱' },
-    { href: '/tokens', label: '访问令牌', icon: '🔑' },
+    { href: '/tokens', label: '用户与凭证', icon: '👤' },
     { href: '/settings', label: '系统设置', icon: '⚙️' }
   ];
 

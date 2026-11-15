@@ -17,6 +17,10 @@ export const GET: RequestHandler = async ({ request, platform }) => {
     ok: true,
     protocol: 1,
     server: '0.1.0',
-    time: Date.now()
+    time: Date.now(),
+    user: {
+      id: auth.userId,
+      name: auth.userName
+    }
   });
 };

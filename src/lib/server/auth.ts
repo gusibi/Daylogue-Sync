@@ -79,12 +79,19 @@ export async function verifySessionCookie(cookie: string | undefined, secret: st
 }
 
 /**
- * 校验 Sync Token (Bearer)，并返回 token 元数据
+ * 校验 Sync Token (Bearer)，并返回 token 及用户元数据
  */
 export async function verifySyncToken(
   db: D1Database,
   rawToken: string
-): Promise<{ ok: boolean; tokenId?: string; spaceId?: string; name?: string }> {
+): Promise<{
+  ok: boolean;
+  tokenId?: string;
+  spaceId?: string;
+  name?: string;
+  userId?: string;
+  userName?: string;
+}> {
   if (!rawToken || !rawToken.trim()) {
     return { ok: false };
   }
@@ -92,9 +99,21 @@ export async function verifySyncToken(
   const tokenHash = await sha256(cleanToken);
 
   const row = await db
-    .prepare('SELECT id, space_id, name, revoked_at FROM tokens WHERE hash = ?1')
+    .prepare(
+      `SELECT t.id, t.space_id, t.name, t.revoked_at, t.user_id, u.name as user_name
+       FROM tokens t
+       LEFT JOIN users u ON u.id = t.user_id
+       WHERE t.hash = ?1`
+    )
     .bind(tokenHash)
-    .first<{ id: string; space_id: string; name: string; revoked_at: number | null }>();
+    .first<{
+      id: string;
+      space_id: string;
+      name: string;
+      revoked_at: number | null;
+      user_id: string | null;
+      user_name: string | null;
+    }>();
 
   if (!row || row.revoked_at !== null) {
     return { ok: false };
@@ -106,11 +125,16 @@ export async function verifySyncToken(
     .run()
     .catch(() => {});
 
+  const userId = row.user_id || `usr_${row.id.replace(/^tok_/, '')}`;
+  const userName = row.user_name || row.name;
+
   return {
     ok: true,
     tokenId: row.id,
     spaceId: row.space_id,
-    name: row.name
+    name: row.name,
+    userId,
+    userName
   };
 }
 

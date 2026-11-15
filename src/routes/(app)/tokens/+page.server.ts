@@ -9,7 +9,22 @@ export const load: PageServerLoad = async ({ platform }) => {
   }
 
   const rows = await db
-    .prepare('SELECT id, name, prefix, created_at, last_used, revoked_at FROM tokens ORDER BY created_at DESC')
+    .prepare(`
+      SELECT 
+        t.id, 
+        t.name, 
+        t.prefix, 
+        t.created_at, 
+        t.last_used, 
+        t.revoked_at,
+        t.user_id,
+        COALESCE(u.name, t.name) as user_name,
+        COALESCE(u.id, t.user_id, 'usr_' || substr(t.id, 5)) as uid,
+        (SELECT COUNT(*) FROM devices d WHERE d.token_id = t.id) as device_count
+      FROM tokens t
+      LEFT JOIN users u ON u.id = t.user_id
+      ORDER BY t.created_at DESC
+    `)
     .all<{
       id: string;
       name: string;
@@ -17,6 +32,10 @@ export const load: PageServerLoad = async ({ platform }) => {
       created_at: number;
       last_used: number | null;
       revoked_at: number | null;
+      user_id: string | null;
+      user_name: string;
+      uid: string;
+      device_count: number;
     }>();
 
   return {
@@ -32,27 +51,36 @@ export const actions: Actions = {
     const form = await request.formData();
     const name = form.get('name')?.toString()?.trim();
     if (!name) {
-      return fail(400, { error: '请提供令牌名称' });
+      return fail(400, { error: '请提供用户名称' });
     }
 
-    // 生成随机 32 字节 Token
+    // 生成随机 32 字节 Token 与唯一 UID
     const rand = crypto.getRandomValues(new Uint8Array(24));
     const rawToken = 'sync_' + Array.from(rand).map((b) => b.toString(16).padStart(2, '0')).join('');
     const tokenHash = await sha256(rawToken);
     const prefix = rawToken.slice(0, 10);
-    const id = 'tok_' + crypto.randomUUID().slice(0, 8);
+    const tokenId = 'tok_' + crypto.randomUUID().slice(0, 8);
+    const userId = 'usr_' + crypto.randomUUID().slice(0, 8);
+    const now = Date.now();
 
-    await db
-      .prepare(
-        'INSERT INTO tokens (id, space_id, name, hash, prefix, created_at, last_used, revoked_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, NULL, NULL)'
-      )
-      .bind(id, 'default', name, tokenHash, prefix, Date.now())
-      .run();
+    await db.batch([
+      db
+        .prepare(
+          'INSERT INTO users (id, space_id, name, token_id, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?5)'
+        )
+        .bind(userId, 'default', name, tokenId, now),
+      db
+        .prepare(
+          'INSERT INTO tokens (id, space_id, name, hash, prefix, user_id, created_at, last_used, revoked_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, NULL, NULL)'
+        )
+        .bind(tokenId, 'default', name, tokenHash, prefix, userId, now)
+    ]);
 
     return {
       created: true,
       rawToken,
-      name
+      name,
+      userId
     };
   },
 

@@ -41,6 +41,7 @@ export const POST: RequestHandler = async ({ request, platform }) => {
       deviceName,
       platform: clientPlatform,
       tokenId: auth.tokenId,
+      userId: auth.userId,
       records
     });
 

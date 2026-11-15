@@ -102,6 +102,7 @@
             <tr>
               <th class="py-2 px-3">时间</th>
               <th class="py-2 px-3">类型</th>
+              <th class="py-2 px-3">用户</th>
               <th class="py-2 px-3">主键 ID</th>
               <th class="py-2 px-3">内容摘要</th>
               <th class="py-2 px-3">设备</th>
@@ -125,6 +126,9 @@
                   >
                     {r.type}{r.deleted ? ' · 已删' : ''}
                   </span>
+                </td>
+                <td class="py-2 px-3 whitespace-nowrap font-medium text-foreground text-[11px]" title={r.uid}>
+                  {r.userName}
                 </td>
                 <td class="py-2 px-3 font-mono text-[11px] max-w-[120px] truncate" title={r.id}>
                   {r.id}
@@ -172,6 +176,7 @@
         <!-- 基础元数据 -->
         <div class="rounded-md border border-border bg-muted/20 p-3 space-y-1.5 font-mono text-[11px]">
           <div class="flex justify-between"><span class="text-muted-foreground">主键 ID:</span> <span>{selectedRecord.id}</span></div>
+          <div class="flex justify-between"><span class="text-muted-foreground">所属用户:</span> <span class="text-foreground">{selectedRecord.userName} <span class="text-muted-foreground">({selectedRecord.uid})</span></span></div>
           <div class="flex justify-between"><span class="text-muted-foreground">游标 seq:</span> <span>{selectedRecord.seq}</span></div>
           <div class="flex justify-between"><span class="text-muted-foreground">HLC:</span> <span>{selectedRecord.hlc}</span></div>
           <div class="flex justify-between"><span class="text-muted-foreground">来源设备:</span> <span>{selectedRecord.deviceId}</span></div>

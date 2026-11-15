@@ -15,34 +15,40 @@ export const load: PageServerLoad = async ({ url, platform }) => {
   const pageSize = 50;
   const offset = (page - 1) * pageSize;
 
-  let query = 'SELECT type, id, v, data, deleted, hlc, ts, device_id, seq, updated_at FROM records WHERE 1=1';
+  let query = `
+    SELECT r.type, r.id, r.v, r.data, r.deleted, r.hlc, r.ts, r.device_id, r.seq, r.updated_at, r.uid,
+           COALESCE(u.name, r.uid) as user_name
+    FROM records r
+    LEFT JOIN users u ON u.id = r.uid
+    WHERE 1=1
+  `;
   const params: any[] = [];
 
   // Tab 筛选
   if (tab === 'my_message') {
-    query += " AND type = 'message' AND json_extract(data, '$.role') = 0";
+    query += " AND r.type = 'message' AND json_extract(r.data, '$.role') = 0";
   } else if (tab === 'ai_message') {
-    query += " AND type = 'message' AND json_extract(data, '$.role') = 1";
+    query += " AND r.type = 'message' AND json_extract(r.data, '$.role') = 1";
   } else if (tab === 'other') {
-    query += " AND type NOT IN ('message', 'diary', 'todo', 'bill', 'session', 'tag', 'setting')";
+    query += " AND r.type NOT IN ('message', 'diary', 'todo', 'bill', 'session', 'tag', 'setting')";
   } else if (tab !== 'all') {
-    query += ' AND type = ?';
+    query += ' AND r.type = ?';
     params.push(tab);
   }
 
   // 是否显示已删除
   if (!showDeleted) {
-    query += ' AND deleted = 0';
+    query += ' AND r.deleted = 0';
   }
 
   // 关键词检索
   if (q.trim()) {
-    query += ' AND (id LIKE ? OR data LIKE ?)';
+    query += ' AND (r.id LIKE ? OR r.data LIKE ?)';
     params.push(`%${q.trim()}%`, `%${q.trim()}%`);
   }
 
   // 排序与分页
-  query += ' ORDER BY ts DESC LIMIT ? OFFSET ?';
+  query += ' ORDER BY r.ts DESC LIMIT ? OFFSET ?';
   params.push(pageSize, offset);
 
   const stmt = db.prepare(query);
@@ -57,6 +63,8 @@ export const load: PageServerLoad = async ({ url, platform }) => {
     device_id: string;
     seq: number;
     updated_at: number;
+    uid: string;
+    user_name: string;
   }>();
 
   const records = (rows.results || []).map((r) => ({
@@ -69,6 +77,8 @@ export const load: PageServerLoad = async ({ url, platform }) => {
     deviceId: r.device_id,
     seq: r.seq,
     updatedAt: r.updated_at,
+    uid: r.uid || 'usr_default',
+    userName: r.user_name || r.uid || '默认用户',
     data: r.data ? JSON.parse(r.data) : null
   }));
 
