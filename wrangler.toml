@@ -12,7 +12,3 @@ migrations_dir = "migrations"
 [[r2_buckets]]
 binding = "BLOBS"
 bucket_name = "daylogue-blobs"
-
-[vars]
-ADMIN_KEY = "admin123"
-SESSION_SECRET = "change-this-in-production-to-a-secure-random-string"
