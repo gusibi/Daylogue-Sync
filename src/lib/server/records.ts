@@ -215,17 +215,27 @@ export async function pullSince(
   const hasMore = results.length > safeLimit;
   const sliced = hasMore ? results.slice(0, safeLimit) : results;
 
-  const records: SyncEnvelope[] = sliced.map((r) => ({
-    type: r.type,
-    id: r.id,
-    v: r.v,
-    uid: r.uid || 'usr_default',
-    hlc: r.hlc,
-    ts: r.ts,
-    deleted: r.deleted === 1,
-    data: r.data ? JSON.parse(r.data) : null,
-    seq: r.seq
-  }));
+  const records: SyncEnvelope[] = sliced.map((r) => {
+    let parsedData: Record<string, unknown> | null = null;
+    if (r.data) {
+      try {
+        parsedData = JSON.parse(r.data);
+      } catch {
+        parsedData = null;
+      }
+    }
+    return {
+      type: r.type,
+      id: r.id,
+      v: r.v ?? 1,
+      uid: r.uid || 'usr_default',
+      hlc: r.hlc,
+      ts: r.ts ?? Date.now(),
+      deleted: r.deleted === 1,
+      data: parsedData,
+      seq: r.seq
+    };
+  });
 
   const nextCursor = records.length > 0 ? (records[records.length - 1].seq ?? since) : since;
 
