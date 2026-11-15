@@ -1,16 +1,12 @@
 name = "daylogue-sync"
-main = ".svelte-kit/cloudflare/_worker.js"
+pages_build_output_dir = ".svelte-kit/cloudflare"
 compatibility_date = "2024-11-01"
 compatibility_flags = ["nodejs_compat"]
-
-[assets]
-directory = ".svelte-kit/cloudflare"
-binding = "ASSETS"
 
 [[d1_databases]]
 binding = "DB"
 database_name = "daylogue-sync"
-database_id = "daylogue-sync-local"
+database_id = "e7735d0a-37e0-46d6-88b7-bbac4c98635f"
 migrations_dir = "migrations"
 
 [[r2_buckets]]
