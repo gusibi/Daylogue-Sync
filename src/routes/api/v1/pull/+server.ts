@@ -31,8 +31,8 @@ async function handlePull(url: URL, request: Request, platform: any) {
     try {
       const body = await request.json();
       if (body && typeof body === 'object') {
-        if (body.since !== undefined) sinceParam = String(body.since);
-        if (body.limit !== undefined) limitParam = String(body.limit);
+        if ('since' in body && body.since !== undefined) sinceParam = String(body.since);
+        if ('limit' in body && body.limit !== undefined) limitParam = String(body.limit);
       }
     } catch {
       // fallback to url query

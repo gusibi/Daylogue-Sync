@@ -1,6 +1,6 @@
 import type { PageServerLoad, Actions } from './$types';
 import { fail } from '@sveltejs/kit';
-import { getNextSeqBatch } from '$lib/server/db';
+import { deleteRecord as deleteSyncRecord } from '$lib/server/records';
 
 export const load: PageServerLoad = async ({ url, platform }) => {
   const db = platform?.env?.DB;
@@ -104,17 +104,7 @@ export const actions: Actions = {
       return fail(400, { error: 'Missing type or id' });
     }
 
-    const { startSeq } = await getNextSeqBatch(db, 1);
-    const now = Date.now();
-    const hlc = `${now}-0001-admin_del`;
-
-    await db
-      .prepare(
-        `UPDATE records SET deleted = 1, data = NULL, hlc = ?1, seq = ?2, updated_at = ?3
-         WHERE space_id = 'default' AND type = ?4 AND id = ?5`
-      )
-      .bind(hlc, startSeq, now, type, id)
-      .run();
+    await deleteSyncRecord(db, 'default', type, id);
 
     return { success: true };
   }

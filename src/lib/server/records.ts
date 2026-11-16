@@ -1,5 +1,4 @@
-import { isHlcNewer } from './hlc';
-import { getNextSeqBatch, getCurrentSeq } from './db';
+import { getCurrentSeq } from './db';
 import { WIPE_PHRASE } from '$lib/confirm';
 
 export interface SyncEnvelope {
@@ -30,116 +29,81 @@ export interface PushResult {
   cursor: number;
 }
 
-/**
- * 批量处理推送过来的记录（LWW 规则）
- */
+interface StoredRecord {
+  type: string;
+  id: string;
+  v: number;
+  uid: string;
+  hlc: string;
+  ts: number;
+  deleted: number;
+  data: string | null;
+  seq: number;
+}
+
+function envelope(row: Partial<StoredRecord> | undefined): SyncEnvelope {
+  if (!row || typeof row.type !== 'string' || typeof row.id !== 'string'
+    || typeof row.hlc !== 'string' || typeof row.seq !== 'number') {
+    throw new Error('Missing stored conflict record');
+  }
+  return {
+    type: row.type, id: row.id, v: row.v ?? 1, uid: row.uid || 'usr_default',
+    hlc: row.hlc, ts: row.ts, deleted: row.deleted === 1,
+    data: row.data ? JSON.parse(row.data) : null, seq: row.seq
+  };
+}
+
+/** Version comparison, sequence allocation and writes share one D1 transaction. */
 export async function pushBatch(db: D1Database, opts: PushOptions): Promise<PushResult> {
   const startTime = Date.now();
   const { spaceId, deviceId, deviceName, platform, tokenId, records } = opts;
-
   if (!records || records.length === 0) {
-    const cur = await getCurrentSeq(db);
-    return { accepted: [], conflicts: [], cursor: cur };
+    return { accepted: [], conflicts: [], cursor: await getCurrentSeq(db) };
   }
 
-  // 1. 查询库中已有记录的 hlc 及完整记录，用于冲突检测
-  const acceptedRecords: SyncEnvelope[] = [];
-  const conflictRecords: SyncEnvelope[] = [];
-
-  for (const item of records) {
-    const existing = await db
-      .prepare('SELECT type, id, v, data, deleted, hlc, ts, seq, uid FROM records WHERE space_id = ?1 AND type = ?2 AND id = ?3')
-      .bind(spaceId, item.type, item.id)
-      .first<{
-        type: string;
-        id: string;
-        v: number;
-        data: string | null;
-        deleted: number;
-        hlc: string;
-        ts: number;
-        seq: number;
-        uid: string;
-      }>();
-
-    if (!existing) {
-      // 库中尚无此记录，直接接受
-      acceptedRecords.push(item);
+  const statements: D1PreparedStatement[] = [];
+  const now = Date.now();
+  for (const rec of records) {
+    // Decide against the version present at commit time, not a previous SELECT.
+    statements.push(db.prepare(
+      `UPDATE meta SET value = CAST(value AS INTEGER) + 1
+       WHERE key = 'seq' AND NOT EXISTS (
+         SELECT 1 FROM records
+         WHERE space_id = ?1 AND type = ?2 AND id = ?3 AND hlc >= ?4
+       )`
+    ).bind(spaceId, rec.type, rec.id, rec.hlc));
+    statements.push(db.prepare(
+      `INSERT INTO records (space_id, type, id, v, data, deleted, hlc, ts, device_id, uid, seq, updated_at)
+       VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10,
+         (SELECT CAST(value AS INTEGER) FROM meta WHERE key = 'seq'), ?11)
+       ON CONFLICT(space_id, type, id) DO UPDATE SET
+         v = excluded.v, data = excluded.data, deleted = excluded.deleted,
+         hlc = excluded.hlc, ts = excluded.ts, device_id = excluded.device_id,
+         uid = excluded.uid, seq = excluded.seq, updated_at = excluded.updated_at
+       WHERE excluded.hlc > records.hlc
+       RETURNING id`
+    ).bind(spaceId, rec.type, rec.id, rec.v ?? 1,
+      rec.deleted ? null : JSON.stringify(rec.data ?? {}), rec.deleted ? 1 : 0,
+      rec.hlc, rec.ts ?? now, deviceId, rec.uid || opts.userId || 'usr_default', now));
+    // Return conflicts from the same transaction, including the actual winner.
+    statements.push(db.prepare(
+      'SELECT type, id, v, uid, hlc, ts, deleted, data, seq FROM records WHERE space_id = ?1 AND type = ?2 AND id = ?3'
+    ).bind(spaceId, rec.type, rec.id));
+  }
+  statements.push(db.prepare("SELECT CAST(value AS INTEGER) AS seq FROM meta WHERE key = 'seq'"));
+  const results = await db.batch<Partial<StoredRecord>>(statements);
+  const accepted: string[] = [];
+  const conflicts: SyncEnvelope[] = [];
+  records.forEach((rec, i) => {
+    if (results[i * 3 + 1].results.length > 0) {
+      accepted.push(rec.id);
     } else {
-      if (isHlcNewer(item.hlc, existing.hlc)) {
-        // 新传入记录更晚，胜出
-        acceptedRecords.push(item);
-      } else {
-        // 库中已有记录更加新，判定为冲突，返回服务端版本让客户端更新覆盖
-        conflictRecords.push({
-          type: existing.type,
-          id: existing.id,
-          v: existing.v,
-          uid: existing.uid,
-          hlc: existing.hlc,
-          ts: existing.ts,
-          deleted: existing.deleted === 1,
-          data: existing.data ? JSON.parse(existing.data) : null,
-          seq: existing.seq
-        });
-      }
+      const winner = results[i * 3 + 2].results[0];
+      conflicts.push(envelope(winner));
     }
-  }
-
-  let finalSeq = await getCurrentSeq(db);
-
-  if (acceptedRecords.length > 0) {
-    const { startSeq, endSeq } = await getNextSeqBatch(db, acceptedRecords.length);
-    finalSeq = endSeq;
-
-    const stmts: D1PreparedStatement[] = [];
-    const now = Date.now();
-
-    for (let i = 0; i < acceptedRecords.length; i++) {
-      const rec = acceptedRecords[i];
-      const assignedSeq = startSeq + i;
-      const isDeleted = rec.deleted ? 1 : 0;
-      const dataStr = isDeleted ? null : JSON.stringify(rec.data ?? {});
-      const ts = rec.ts ?? now;
-      const v = rec.v ?? 1;
-      const recordUid = rec.uid || opts.userId || 'usr_default';
-
-      stmts.push(
-        db
-          .prepare(
-            `INSERT INTO records (space_id, type, id, v, data, deleted, hlc, ts, device_id, uid, seq, updated_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)
-             ON CONFLICT(space_id, type, id) DO UPDATE SET
-               v = ?4,
-               data = ?5,
-               deleted = ?6,
-               hlc = ?7,
-               ts = ?8,
-               device_id = ?9,
-               uid = ?10,
-               seq = ?11,
-               updated_at = ?12`
-          )
-          .bind(
-            spaceId,
-            rec.type,
-            rec.id,
-            v,
-            dataStr,
-            isDeleted,
-            rec.hlc,
-            ts,
-            deviceId,
-            recordUid,
-            assignedSeq,
-            now
-          )
-      );
-    }
-
-    // 批量执行
-    await db.batch(stmts);
-  }
+  });
+  const finalSeq = Number(results[results.length - 1].results[0]?.seq);
+  if (!Number.isSafeInteger(finalSeq)) throw new Error('Invalid committed sync sequence');
 
   // 2. 更新设备活跃状态
   await db
@@ -163,7 +127,7 @@ export async function pushBatch(db: D1Database, opts: PushOptions): Promise<Push
     .prepare(
       'INSERT INTO sync_log (at, device_id, kind, count, conflicts, ms, error) VALUES (?1, ?2, ?3, ?4, ?5, ?6, NULL)'
     )
-    .bind(Date.now(), deviceId, 'push', acceptedRecords.length, conflictRecords.length, elapsed)
+    .bind(Date.now(), deviceId, 'push', accepted.length, conflicts.length, elapsed)
     .run()
     .catch(() => {});
 
@@ -173,8 +137,8 @@ export async function pushBatch(db: D1Database, opts: PushOptions): Promise<Push
     .catch(() => {});
 
   return {
-    accepted: acceptedRecords.map((r) => r.id),
-    conflicts: conflictRecords,
+    accepted,
+    conflicts,
     cursor: finalSeq
   };
 }
@@ -240,8 +204,10 @@ export async function pullSince(
   const nextCursor = records.length > 0 ? (records[records.length - 1].seq ?? since) : since;
 
   if (deviceId) {
-    db.prepare('UPDATE devices SET last_seen = ?1, last_pull_seq = ?2 WHERE space_id = ?3 AND id = ?4')
-      .bind(Date.now(), nextCursor, spaceId, deviceId)
+    // Only `since` acknowledges a cursor already saved by this device.
+    // The response's `next` is not acknowledged until a subsequent request.
+    await db.prepare('UPDATE devices SET last_seen = ?1, last_pull_seq = ?2 WHERE space_id = ?3 AND id = ?4')
+      .bind(Date.now(), since, spaceId, deviceId)
       .run()
       .catch(() => {});
   }
@@ -251,6 +217,46 @@ export async function pullSince(
     next: nextCursor,
     hasMore
   };
+}
+
+async function tombstoneRecords(
+  db: D1Database, spaceId: string, target?: { type: string; id: string }
+): Promise<number> {
+  const now = Date.now();
+  const wipeHlc = `${String(now).padStart(13, '0')}-0000-server_delete`;
+  const type = target?.type ?? null;
+  const id = target?.id ?? null;
+  const results = await db.batch<{ seq: number }>([
+    // Count and allocate inside the same transaction as the tombstone writes.
+    db.prepare(`UPDATE meta SET value = CAST(value AS INTEGER) +
+      (SELECT COUNT(*) FROM records WHERE space_id = ?1 AND deleted = 0 AND (?2 IS NULL OR (type = ?2 AND id = ?3)))
+      WHERE key = 'seq'`).bind(spaceId, type, id),
+    db.prepare(`WITH active AS MATERIALIZED (
+        SELECT type, id, ROW_NUMBER() OVER (ORDER BY type, id) AS ordinal
+        FROM records WHERE space_id = ?1 AND deleted = 0 AND (?4 IS NULL OR (type = ?4 AND id = ?5))
+      )
+      UPDATE records SET deleted = 1, data = NULL,
+        hlc = CASE WHEN hlc < ?2 THEN ?2 ELSE
+          printf('%013d-%04d-server_delete',
+            CAST(substr(hlc, 1, 13) AS INTEGER) + CASE WHEN CAST(substr(hlc, 15, 4) AS INTEGER) >= 9999 THEN 1 ELSE 0 END,
+            CASE WHEN CAST(substr(hlc, 15, 4) AS INTEGER) >= 9999 THEN 0 ELSE CAST(substr(hlc, 15, 4) AS INTEGER) + 1 END)
+          END,
+        seq = (SELECT CAST(value AS INTEGER) FROM meta WHERE key = 'seq')
+          - (SELECT COUNT(*) FROM active)
+          + (SELECT ordinal FROM active WHERE active.type = records.type AND active.id = records.id),
+        updated_at = ?3
+      WHERE space_id = ?1 AND deleted = 0 AND (?4 IS NULL OR (type = ?4 AND id = ?5))`).bind(spaceId, wipeHlc, now, type, id),
+    db.prepare("SELECT CAST(value AS INTEGER) AS seq FROM meta WHERE key = 'seq'")
+  ]);
+  const cursor = Number(results[2].results[0]?.seq);
+  if (!Number.isSafeInteger(cursor)) throw new Error('Invalid committed deletion sequence');
+
+  return cursor;
+}
+
+/** Admin single-record deletions use the same committed cursor rules as wipe. */
+export async function deleteRecord(db: D1Database, spaceId: string, type: string, id: string): Promise<void> {
+  await tombstoneRecords(db, spaceId, { type, id });
 }
 
 /**
@@ -266,37 +272,7 @@ export async function wipeSpace(
     return { ok: false, error: '确认短语不匹配，无法执行清空操作' };
   }
 
-  // 1. 查询出所有目前未被删除的记录，全部置为墓碑并赋予新的 seq，让已同步的端能接收到删除事件
-  const activeRecords = await db
-    .prepare('SELECT type, id FROM records WHERE space_id = ?1 AND deleted = 0')
-    .bind(spaceId)
-    .all<{ type: string; id: string }>();
-
-  const list = activeRecords.results || [];
-  let cursor = await getCurrentSeq(db);
-
-  if (list.length > 0) {
-    const { startSeq, endSeq } = await getNextSeqBatch(db, list.length);
-    cursor = endSeq;
-    const now = Date.now();
-    const stmts: D1PreparedStatement[] = [];
-
-    for (let i = 0; i < list.length; i++) {
-      const item = list[i];
-      const seq = startSeq + i;
-      const hlc = `${now}-${String(i).padStart(4, '0')}-wipe`;
-
-      stmts.push(
-        db
-          .prepare(
-            `UPDATE records SET deleted = 1, data = NULL, hlc = ?1, seq = ?2, updated_at = ?3
-             WHERE space_id = ?4 AND type = ?5 AND id = ?6`
-          )
-          .bind(hlc, seq, now, spaceId, item.type, item.id)
-      );
-    }
-    await db.batch(stmts);
-  }
+  const cursor = await tombstoneRecords(db, spaceId);
 
   // 2. 清理 R2 中的媒体并清空 blobs 表
   if (blobs) {
